@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Live aircraft tracker — real-time ADS-B flight tracking worldwide">
+<title>Skylink</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body,html{height:100%;background:#0a0a0f;overflow:hidden;color:#ccc;font-family:system-ui,-apple-system,sans-serif}
+#maplibreMap{width:100%;height:100%;position:absolute;top:0;left:0}
+#hud{position:fixed;top:8px;left:8px;color:#4fc3f7;font:700 12px/1 monospace;z-index:9;
+  background:rgba(0,0,0,0.5);padding:5px 8px;border-radius:4px;pointer-events:none}
+#panel{position:fixed;top:76px;right:8px;width:240px;background:rgba(5,5,15,0.9);backdrop-filter:blur(10px);
+  padding:10px;border-radius:6px;z-index:9;display:none;border:1px solid #1a3a4a;font:11px/1.5 monospace;color:#ccc}
+#panel h3{margin:0 0 4px;color:#4fc3f7;font-size:13px}
+#panel .r{display:flex;justify-content:space-between;padding:1px 0}
+#panel .l{color:#555}
+#panel .x{position:absolute;top:4px;right:8px;cursor:pointer;color:#555}
+.style-selector-container{position:absolute!important;top:8px;right:8px;z-index:10}
+.projection-toggle-container{position:absolute!important;top:42px;right:8px;z-index:10}
+.map-style-select{background:#111;color:#ccc;border:1px solid #333;border-radius:4px;padding:4px 6px;font-size:11px;cursor:pointer}
+.projection-toggle{background:#111;color:#ccc;border:1px solid #333;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer;width:100%}
+</style>
+</head>
+<body>
+<div id="maplibreMap" role="application" aria-label="Aircraft tracking map"></div>
+<div id="hud" aria-live="polite">Loading map…</div>
+<div id="panel" role="dialog" aria-label="Aircraft details"><span class="x" onclick="closePanel()" role="button" aria-label="Close" tabindex="0">✕</span><h3 id="ph">—</h3><div id="pb"></div></div>
+<link rel="stylesheet" href="/maplibre-gl.css" media="all">
+<script>
+// Configure API endpoint (set before loading app.js)
+// For Cloudflare Pages, set to your skylink-core backend URL:
+// window.SKYLINK_API = 'https://skylink-api.hpradar.com';
+
+// Lazy-load MapLibre after first paint
+function loadApp(){
+  var s=document.createElement('script');s.src='/maplibre-gl.js';
+  s.onload=function(){
+    var s2=document.createElement('script');s2.src='/mapManager.js';
+    s2.onload=function(){
+      var s3=document.createElement('script');s3.src='/iconMap.js';
+      s3.onload=function(){
+        var s4=document.createElement('script');s4.src='/app.js';
+        document.head.appendChild(s4);
+      };document.head.appendChild(s3);
+    };document.head.appendChild(s2);
+  };document.head.appendChild(s);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadApp);
+else loadApp();
+</script>
+</body>
+</html>
