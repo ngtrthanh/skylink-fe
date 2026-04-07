@@ -1,17 +1,15 @@
 const API_BASE = window.SKYLINK_API || '';
 const WS_URL = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (window.SKYLINK_API ? new URL(API_BASE).host : location.host) + '/ws';
-let ws = null, selected = null;
+let ws = null, selected = null, spriteLoaded = false;
 
 const map = initMap({ containerId: 'maplibreMap', center: [20, 30], zoom: 3 });
 
-function addLayers() {
-  if (map.getSource('ac')) return;
-
+function loadSprite(cb) {
   const dpr = window.devicePixelRatio >= 2 ? '@2x' : '';
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = () => {
-    fetch(API_BASE+'/sprite' + dpr + '.json').then(r => r.json()).then(meta => {
+    fetch('/sprite' + dpr + '.json').then(r => r.json()).then(meta => {
       const c = document.createElement('canvas');
       c.width = img.width; c.height = img.height;
       c.getContext('2d').drawImage(img, 0, 0);
@@ -20,9 +18,15 @@ function addLayers() {
         if (!map.hasImage(name))
           map.addImage(name, {width:m.width, height:m.height, data:data.data}, {sdf:true, pixelRatio: m.pixelRatio});
       }
+      spriteLoaded = true;
+      if (cb) cb();
     });
   };
   img.src = '/sprite' + dpr + '.png';
+}
+
+function addLayers() {
+  if (map.getSource('ac')) return;
 
   map.addSource('ac', { type:'geojson', data:{type:'FeatureCollection',features:[]} });
   map.addSource('trace', { type:'geojson', data:{type:'FeatureCollection',features:[]} });
@@ -32,36 +36,62 @@ function addLayers() {
       0,'#2ecc71',15000,'#f1c40f',30000,'#e67e22',42000,'#e74c3c'],
     'line-width':2, 'line-opacity':0.7 }});
 
-  map.addLayer({ id:'ac-icons', type:'symbol', source:'ac', layout:{
-    'icon-image':['coalesce',['get','_icon'],'unknown'],
-    'icon-size':['interpolate',['linear'],['zoom'], 2,0.35, 5,0.5, 8,0.65, 12,0.85, 15,1.0],
-    'icon-rotate':['coalesce',['get','track'],0],
-    'icon-rotation-alignment':'map',
-    'icon-allow-overlap':true,
-    'icon-ignore-placement':true,
-    'icon-padding':0,
-  }, paint:{
-    'icon-color':['interpolate',['linear'],['coalesce',['get','alt_baro'],0],
+  // Always add circle layer as base (visible immediately)
+  map.addLayer({ id:'ac-dots', type:'circle', source:'ac', paint:{
+    'circle-radius':['interpolate',['linear'],['zoom'], 2,1.5, 6,3, 10,5, 14,7],
+    'circle-color':['interpolate',['linear'],['coalesce',['get','alt_baro'],0],
       0,'#2ecc71',5000,'#3498db',15000,'#f1c40f',30000,'#e67e22',42000,'#e74c3c'],
+    'circle-opacity':['case',['boolean',['feature-state','hasIcon'],false], 0, 0.85],
   }});
 
-  map.on('click','ac-icons', e => {
-    const p = e.features[0].properties;
-    selected = p.hex;
-    document.getElementById('ph').textContent = p.flight || p.hex;
-    document.getElementById('pb').innerHTML = [
-      ['ICAO',p.hex],['Reg',p.r||'—'],['Type',p.t||'—'],
-      ['Alt',p.alt_baro?p.alt_baro+' ft':'—'],
-      ['GS',p.gs?Math.round(p.gs)+' kt':'—'],['Trk',p.track?Math.round(p.track)+'°':'—'],
-      ['Sqk',p.squawk||'—'],['Cat',p.category||'—'],
-    ].map(([l,v])=>`<div class="r"><span class="l">${l}</span><span>${v}</span></div>`).join('');
-    document.getElementById('panel').style.display='block';
-    loadTrace(p.hex);
+  // Add symbol layer on top — icons replace dots once sprite loads
+  function addIconLayer() {
+    if (map.getLayer('ac-icons')) return;
+    map.addLayer({ id:'ac-icons', type:'symbol', source:'ac', layout:{
+      'icon-image':['coalesce',['get','_icon'],'unknown'],
+      'icon-size':['interpolate',['linear'],['zoom'], 2,0.35, 5,0.5, 8,0.65, 12,0.85, 15,1.0],
+      'icon-rotate':['coalesce',['get','track'],0],
+      'icon-rotation-alignment':'map',
+      'icon-allow-overlap':true,
+      'icon-ignore-placement':true,
+      'icon-padding':0,
+    }, paint:{
+      'icon-color':['interpolate',['linear'],['coalesce',['get','alt_baro'],0],
+        0,'#2ecc71',5000,'#3498db',15000,'#f1c40f',30000,'#e67e22',42000,'#e74c3c'],
+    }});
+    // Hide dots once icons are showing
+    map.setPaintProperty('ac-dots', 'circle-opacity', 0);
+  }
+
+  if (spriteLoaded) {
+    addIconLayer();
+  } else {
+    loadSprite(addIconLayer);
+  }
+
+  // Click handler on both layers
+  ['ac-icons','ac-dots'].forEach(layer => {
+    map.on('click', layer, e => {
+      const p = e.features[0].properties;
+      selected = p.hex;
+      document.getElementById('ph').textContent = p.flight || p.hex;
+      document.getElementById('pb').innerHTML = [
+        ['ICAO',p.hex],['Reg',p.r||'—'],['Type',p.t||'—'],
+        ['Alt',p.alt_baro?p.alt_baro+' ft':'—'],
+        ['GS',p.gs?Math.round(p.gs)+' kt':'—'],['Trk',p.track?Math.round(p.track)+'°':'—'],
+        ['Sqk',p.squawk||'—'],['Cat',p.category||'—'],
+      ].map(([l,v])=>`<div class="r"><span class="l">${l}</span><span>${v}</span></div>`).join('');
+      document.getElementById('panel').style.display='block';
+      loadTrace(p.hex);
+    });
   });
+  map.on('mouseenter','ac-dots',()=>map.getCanvas().style.cursor='pointer');
+  map.on('mouseleave','ac-dots',()=>map.getCanvas().style.cursor='');
   map.on('mouseenter','ac-icons',()=>map.getCanvas().style.cursor='pointer');
   map.on('mouseleave','ac-icons',()=>map.getCanvas().style.cursor='');
   map.on('click', e => {
-    if (!map.queryRenderedFeatures(e.point,{layers:['ac-icons']}).length) closePanel();
+    const f = map.queryRenderedFeatures(e.point,{layers:['ac-icons','ac-dots']});
+    if (!f.length) closePanel();
   });
 }
 
@@ -114,5 +144,5 @@ function sendBbox() {
     Math.min(180,b.getEast()+p).toFixed(1)].join(','));
 }
 
-map.on('style.load', addLayers);
+map.on('style.load', () => { spriteLoaded = false; addLayers(); });
 map.on('load', () => { addLayers(); connectWS(); map.on('moveend', sendBbox); });
