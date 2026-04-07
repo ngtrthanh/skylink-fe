@@ -36,15 +36,13 @@ function addLayers() {
       0,'#2ecc71',15000,'#f1c40f',30000,'#e67e22',42000,'#e74c3c'],
     'line-width':2, 'line-opacity':0.7 }});
 
-  // Always add circle layer as base (visible immediately)
   map.addLayer({ id:'ac-dots', type:'circle', source:'ac', paint:{
     'circle-radius':['interpolate',['linear'],['zoom'], 2,1.5, 6,3, 10,5, 14,7],
     'circle-color':['interpolate',['linear'],['coalesce',['get','alt_baro'],0],
       0,'#2ecc71',5000,'#3498db',15000,'#f1c40f',30000,'#e67e22',42000,'#e74c3c'],
-    'circle-opacity':['case',['boolean',['feature-state','hasIcon'],false], 0, 0.85],
+    'circle-opacity':0.85,
   }});
 
-  // Add symbol layer on top — icons replace dots once sprite loads
   function addIconLayer() {
     if (map.getLayer('ac-icons')) return;
     map.addLayer({ id:'ac-icons', type:'symbol', source:'ac', layout:{
@@ -59,20 +57,15 @@ function addLayers() {
       'icon-color':['interpolate',['linear'],['coalesce',['get','alt_baro'],0],
         0,'#2ecc71',5000,'#3498db',15000,'#f1c40f',30000,'#e67e22',42000,'#e74c3c'],
     }});
-    // Hide dots once icons are showing
     map.setPaintProperty('ac-dots', 'circle-opacity', 0);
     map.on('click','ac-icons', clickHandler);
     map.on('mouseenter','ac-icons',()=>map.getCanvas().style.cursor='pointer');
     map.on('mouseleave','ac-icons',()=>map.getCanvas().style.cursor='');
   }
 
-  if (spriteLoaded) {
-    addIconLayer();
-  } else {
-    loadSprite(addIconLayer);
-  }
+  if (spriteLoaded) addIconLayer();
+  else loadSprite(addIconLayer);
 
-  // Click handler — works on whichever layer is active
   const clickHandler = e => {
     const p = e.features[0].properties;
     selected = p.hex;
@@ -90,8 +83,8 @@ function addLayers() {
   map.on('mouseenter','ac-dots',()=>map.getCanvas().style.cursor='pointer');
   map.on('mouseleave','ac-dots',()=>map.getCanvas().style.cursor='');
   map.on('click', e => {
-    const f = map.queryRenderedFeatures(e.point,{layers:map.getLayer('ac-icons')?['ac-icons','ac-dots']:['ac-dots']});
-    if (!f.length) closePanel();
+    const layers = map.getLayer('ac-icons') ? ['ac-icons','ac-dots'] : ['ac-dots'];
+    if (!map.queryRenderedFeatures(e.point,{layers}).length) closePanel();
   });
 }
 
@@ -121,14 +114,20 @@ async function loadTrace(hex) {
 
 function connectWS() {
   ws = new WebSocket(WS_URL);
+  ws.binaryType = 'arraybuffer';
   ws.onopen = () => sendBbox();
   ws.onmessage = e => {
     try {
-      const data = JSON.parse(e.data);
+      let data;
+      if (e.data instanceof ArrayBuffer) {
+        data = decodeBinCraft(e.data);
+      } else {
+        data = JSON.parse(e.data);
+      }
       for (const f of data.features) f.properties._icon = resolveIcon(f.properties);
       if (map.getSource('ac')) map.getSource('ac').setData(data);
       document.getElementById('hud').textContent = data.features.length + ' ac';
-    } catch(err) {}
+    } catch(err) { console.error('ws decode:', err); }
   };
   ws.onclose = () => setTimeout(connectWS, 2000);
   ws.onerror = () => ws.close();

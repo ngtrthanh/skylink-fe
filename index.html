@@ -36,14 +36,13 @@ window.SKYLINK_API = 'https://skylink-api.hpradar.com';
 function loadApp(){
   var s=document.createElement('script');s.src='/maplibre-gl.js';
   s.onload=function(){
-    var s2=document.createElement('script');s2.src='/mapManager.js';
-    s2.onload=function(){
-      var s3=document.createElement('script');s3.src='/iconMap.js';
-      s3.onload=function(){
-        var s4=document.createElement('script');s4.src='/app.js';
-        document.head.appendChild(s4);
-      };document.head.appendChild(s3);
-    };document.head.appendChild(s2);
+    var scripts=['/mapManager.js','/fzstd.js','/bincraft.js','/iconMap.js','/app.js'];
+    function loadNext(i){
+      if(i>=scripts.length)return;
+      var s2=document.createElement('script');s2.src=scripts[i];
+      s2.onload=function(){loadNext(i+1)};document.head.appendChild(s2);
+    }
+    loadNext(0);
   };document.head.appendChild(s);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadApp);
