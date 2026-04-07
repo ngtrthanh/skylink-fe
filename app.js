@@ -61,6 +61,9 @@ function addLayers() {
     }});
     // Hide dots once icons are showing
     map.setPaintProperty('ac-dots', 'circle-opacity', 0);
+    map.on('click','ac-icons', clickHandler);
+    map.on('mouseenter','ac-icons',()=>map.getCanvas().style.cursor='pointer');
+    map.on('mouseleave','ac-icons',()=>map.getCanvas().style.cursor='');
   }
 
   if (spriteLoaded) {
@@ -69,28 +72,25 @@ function addLayers() {
     loadSprite(addIconLayer);
   }
 
-  // Click handler on both layers
-  ['ac-icons','ac-dots'].forEach(layer => {
-    map.on('click', layer, e => {
-      const p = e.features[0].properties;
-      selected = p.hex;
-      document.getElementById('ph').textContent = p.flight || p.hex;
-      document.getElementById('pb').innerHTML = [
-        ['ICAO',p.hex],['Reg',p.r||'—'],['Type',p.t||'—'],
-        ['Alt',p.alt_baro?p.alt_baro+' ft':'—'],
-        ['GS',p.gs?Math.round(p.gs)+' kt':'—'],['Trk',p.track?Math.round(p.track)+'°':'—'],
-        ['Sqk',p.squawk||'—'],['Cat',p.category||'—'],
-      ].map(([l,v])=>`<div class="r"><span class="l">${l}</span><span>${v}</span></div>`).join('');
-      document.getElementById('panel').style.display='block';
-      loadTrace(p.hex);
-    });
-  });
+  // Click handler — works on whichever layer is active
+  const clickHandler = e => {
+    const p = e.features[0].properties;
+    selected = p.hex;
+    document.getElementById('ph').textContent = p.flight || p.hex;
+    document.getElementById('pb').innerHTML = [
+      ['ICAO',p.hex],['Reg',p.r||'—'],['Type',p.t||'—'],
+      ['Alt',p.alt_baro?p.alt_baro+' ft':'—'],
+      ['GS',p.gs?Math.round(p.gs)+' kt':'—'],['Trk',p.track?Math.round(p.track)+'°':'—'],
+      ['Sqk',p.squawk||'—'],['Cat',p.category||'—'],
+    ].map(([l,v])=>`<div class="r"><span class="l">${l}</span><span>${v}</span></div>`).join('');
+    document.getElementById('panel').style.display='block';
+    loadTrace(p.hex);
+  };
+  map.on('click','ac-dots', clickHandler);
   map.on('mouseenter','ac-dots',()=>map.getCanvas().style.cursor='pointer');
   map.on('mouseleave','ac-dots',()=>map.getCanvas().style.cursor='');
-  map.on('mouseenter','ac-icons',()=>map.getCanvas().style.cursor='pointer');
-  map.on('mouseleave','ac-icons',()=>map.getCanvas().style.cursor='');
   map.on('click', e => {
-    const f = map.queryRenderedFeatures(e.point,{layers:['ac-icons','ac-dots']});
+    const f = map.queryRenderedFeatures(e.point,{layers:map.getLayer('ac-icons')?['ac-icons','ac-dots']:['ac-dots']});
     if (!f.length) closePanel();
   });
 }
